@@ -1,0 +1,1 @@
+SELECT * FROM `auto_purch_product_ids`
