@@ -4,6 +4,7 @@
 # Output files
 output/
 *.csv
+logs/
 
 # Python
 __pycache__/
