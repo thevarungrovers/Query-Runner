@@ -259,10 +259,31 @@ def find_sql_files(directory='.'):
     return sorted(sql_files)
 
 
+def append_run_log(log_file, run_date, start_date, end_date, total_sec, status, sql_query):
+    """
+    Append a row to the run log CSV file.
+
+    Args:
+        log_file: Path to the log CSV file
+        run_date: Date of the run (YYYY-MM-DD)
+        start_date: Run start datetime string
+        end_date: Run end datetime string
+        total_sec: Total execution time in seconds
+        status: success or failure
+        sql_query: The SQL query/queries content
+    """
+    file_exists = log_file.exists()
+    with open(log_file, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(['date', 'start date', 'end date', 'total time(sec)', 'status', 'sql query'])
+        writer.writerow([run_date, start_date, end_date, total_sec, status, sql_query])
+
+
 def main():
     # Load environment variables from .env file
     load_dotenv()
-    
+
     parser = argparse.ArgumentParser(
         description='Execute SQL queries from a file and save results to CSV',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -350,13 +371,18 @@ Examples:
     )
     
     print(f"\nExecuting queries...\n")
-    
+
+    start_time = datetime.now()
+    with open(sql_file, 'r', encoding='utf-8') as f:
+        sql_content = f.read()
+
     # Check if queries contain date range for daily processing
     start_date, end_date = extract_date_range(queries)
-    
+
     # Execute queries
     success_count = 0
-    
+    status = "success"
+
     if start_date and end_date:
         # Use day-by-day processing for queries with date ranges
         print(f"Detected date range in queries. Using day-by-day processing for optimal performance.\n")
@@ -368,6 +394,8 @@ Examples:
         print(f"[1/1] Executing query with daily processing...")
         if execute_query_daily_to_csv(connection, queries, output_file):
             success_count += 1
+        else:
+            status = "failure"
         print()
     else:
         # Execute each query normally
@@ -380,10 +408,28 @@ Examples:
             if execute_query_to_csv(connection, query, output_file):
                 success_count += 1
             print()
-    
+        if success_count < len(queries):
+            status = "failure"
+
     # Close connection
     connection.close()
-    
+
+    # Write run log to separate logs folder
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    end_time = datetime.now()
+    total_sec = (end_time - start_time).total_seconds()
+    log_file = log_dir / "query_runner_log.csv"
+    append_run_log(
+        log_file,
+        run_date=start_time.strftime('%Y-%m-%d'),
+        start_date=start_time.strftime('%Y-%m-%d %H:%M:%S'),
+        end_date=end_time.strftime('%Y-%m-%d %H:%M:%S'),
+        total_sec=round(total_sec, 2),
+        status=status,
+        sql_query=sql_content
+    )
+
     # Summary
     print(f"{'='*60}")
     if start_date and end_date:
